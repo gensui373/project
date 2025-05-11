@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チケット管理</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f7;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .ticket-container {
+      overflow-x: hidden;
+    }
+
+    .ticket {
+      background: #fff;
+      margin: 12px 0;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease;
+    }
+
+    .ticket.used {
+      background: #d1d1d6;
+      opacity: 0.6;
+    }
+
+    .ticket-content {
+      padding: 20px;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+
+    .swipe-button {
+      position: absolute;
+      top: 0;
+      right: -80px;
+      height: 100%;
+      width: 80px;
+      background: #007aff;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+      transition: right 0.3s ease;
+    }
+
+    .ticket.swiped .swipe-button {
+      right: 0;
+    }
+
+    #login-section, #admin-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-top: 30px;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background: #007aff;
+      color: white;
+      border: none;
+    }
+
+    .delete-btn {
+      background: #ff3b30;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>チケット一覧</h1>
+  <div class="ticket-container" id="ticketList"></div>
+
+  <div id="login-section">
+    <h2>管理者ログイン</h2>
+    <input type="password" id="adminPassword" placeholder="パスワードを入力">
+    <button onclick="tryLogin()">ログイン</button>
+    <div id="loginMessage"></div>
+  </div>
+
+  <div id="admin-section" style="display:none;">
+    <h2>管理者セクション</h2>
+    <input type="text" id="newTicketName" placeholder="チケット名を入力">
+    <button onclick="addTicket()">追加する</button>
+    <div id="admin-log"></div>
+  </div>
+
+  <script>
+    const adminPassword = "Mickey9981";
+    let adminLoggedIn = false;
+
+    let tickets;
+    let usedTickets;
+
+    try {
+      tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+    } catch (e) {
+      tickets = [];
+    }
+
+    try {
+      usedTickets = JSON.parse(localStorage.getItem("usedTickets")) || {};
+    } catch (e) {
+      usedTickets = {};
+    }
+
+    function saveTickets() {
+      localStorage.setItem("tickets", JSON.stringify(tickets));
+    }
+
+    function render() {
+      const list = document.getElementById("ticketList");
+      list.innerHTML = "";
+
+      tickets.forEach(ticket => {
+        const isUsed = usedTickets[ticket.id];
+        const ticketDiv = document.createElement("div");
+        ticketDiv.className = "ticket" + (isUsed ? " used" : "");
+        ticketDiv.setAttribute("data-id", ticket.id);
+
+        const contentDiv = document.createElement("div");
+        contentDiv.className = "ticket-content";
+        contentDiv.innerText = ticket.name;
+
+        const swipeBtn = document.createElement("div");
+        swipeBtn.className = "swipe-button";
+        swipeBtn.innerText = "使用する";
+        swipeBtn.onclick = () => useTicket(ticket.id);
+
+        ticketDiv.appendChild(contentDiv);
+        ticketDiv.appendChild(swipeBtn);
+
+        if (adminLoggedIn) {
+          const delBtn = document.createElement("button");
+          delBtn.className = "delete-btn";
+          delBtn.innerText = "削除";
+          delBtn.onclick = () => deleteTicket(ticket.id);
+          ticketDiv.appendChild(delBtn);
+        }
+
+        list.appendChild(ticketDiv);
+
+        // スワイプ検出
+        let startX = 0;
+        contentDiv.addEventListener("touchstart", e => {
+          startX = e.touches[0].clientX;
+        });
+
+        contentDiv.addEventListener("touchend", e => {
+          const endX = e.changedTouches[0].clientX;
+          if (startX - endX > 30) {
+            ticketDiv.classList.add("swiped");
+          } else if (endX - startX > 30) {
+            ticketDiv.classList.remove("swiped");
+          }
+        });
+      });
+    }
+
+    function useTicket(id) {
+      const ticket = tickets.find(t => t.id === id);
+      if (!ticket) return;
+      usedTickets[id] = true;
+      localStorage.setItem("usedTickets", JSON.stringify(usedTickets));
+      render();
+    }
+
+    function deleteTicket(id) {
+      if (!confirm("削除してもよいですか？")) return;
+      tickets = tickets.filter(t => t.id !== id);
+      delete usedTickets[id];
+      saveTickets();
+      localStorage.setItem("usedTickets", JSON.stringify(usedTickets));
+      render();
+    }
+
+    function addTicket() {
+      const name = document.getElementById("newTicketName").value.trim();
+      if (!name) return;
+      const newId = Date.now();
+      tickets.push({ id: newId, name });
+      saveTickets();
+      document.getElementById("newTicketName").value = "";
+      document.getElementById("admin-log").innerText = `チケット「${name}」を追加しました。`;
+      render();
+    }
+
+    function tryLogin() {
+      const input = document.getElementById("adminPassword").value;
+      if (input === adminPassword) {
+        adminLoggedIn = true;
+        document.getElementById("login-section").style.display = "none";
+        document.getElementById("admin-section").style.display = "block";
+        render();
+      } else {
+        document.getElementById("loginMessage").innerText = "パスワードが違います。";
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>
